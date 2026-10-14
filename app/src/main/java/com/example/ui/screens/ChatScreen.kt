@@ -484,43 +484,6 @@ internal fun UserMessagePageView(
             onCorrectionClick = onCorrectionClick,
             modifier = Modifier.fillMaxWidth()
         )
-
-        if (!message.polishedText.isNullOrBlank() && message.polishedText.trim() != message.userText.trim()) {
-            Spacer(modifier = Modifier.height(16.dp))
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF131F17))
-                    .border(1.dp, Color(0xFF10B981).copy(alpha = 0.4f), RoundedCornerShape(12.dp))
-                    .padding(14.dp)
-            ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = null,
-                            tint = Color(0xFF10B981),
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "Polished Expression",
-                            color = Color(0xFF10B981),
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    }
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Text(
-                        text = message.polishedText,
-                        color = Color(0xFFE4E4E7),
-                        fontSize = (settings.maxFontSizeSp * 0.75f).coerceAtLeast(13f).sp,
-                        lineHeight = ((settings.maxFontSizeSp * 0.75f).coerceAtLeast(13f) * 1.35f).sp
-                    )
-                }
-            }
-        }
     }
 }
 

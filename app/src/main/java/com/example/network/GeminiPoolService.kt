@@ -217,7 +217,6 @@ class GeminiPoolService(
     private fun parseUnifiedResponse(rawText: String, isFinished: Boolean): UnifiedTurnUpdate {
         var currentAnswer = ""
         var currentUserSentence: String? = null
-        var currentPolishedText: String? = null
         var currentCorrections = emptyList<LinguisticCorrection>()
 
         val afterAnswer = if (rawText.contains("<<<ANSWER>>>")) {
@@ -230,27 +229,14 @@ class GeminiPoolService(
             currentAnswer = afterAnswer.substringBefore("<<<USER_TRANSCRIPT>>>").trim()
             val afterTranscript = afterAnswer.substringAfter("<<<USER_TRANSCRIPT>>>")
 
-            val userTextSection = when {
-                afterTranscript.contains("<<<POLISHED_TEXT>>>") -> afterTranscript.substringBefore("<<<POLISHED_TEXT>>>")
-                afterTranscript.contains("<<<CORRECTIONS>>>") -> afterTranscript.substringBefore("<<<CORRECTIONS>>>")
-                else -> afterTranscript
+            val userTextSection = if (afterTranscript.contains("<<<CORRECTIONS>>>")) {
+                afterTranscript.substringBefore("<<<CORRECTIONS>>>")
+            } else {
+                afterTranscript
             }.trim()
 
             if (userTextSection.isNotBlank()) {
                 currentUserSentence = if (isFinished) userTextSection else cleanStreamingAnswer(userTextSection).trim()
-            }
-
-            if (afterTranscript.contains("<<<POLISHED_TEXT>>>")) {
-                val afterPolished = afterTranscript.substringAfter("<<<POLISHED_TEXT>>>")
-                val polishedSection = if (afterPolished.contains("<<<CORRECTIONS>>>")) {
-                    afterPolished.substringBefore("<<<CORRECTIONS>>>")
-                } else {
-                    afterPolished
-                }.trim()
-
-                if (polishedSection.isNotBlank()) {
-                    currentPolishedText = if (isFinished) polishedSection else cleanStreamingAnswer(polishedSection).trim()
-                }
             }
 
             if (afterTranscript.contains("<<<CORRECTIONS>>>")) {
@@ -267,7 +253,6 @@ class GeminiPoolService(
         return UnifiedTurnUpdate(
             answer = currentAnswer,
             userSentence = currentUserSentence,
-            polishedText = currentPolishedText,
             corrections = currentCorrections,
             isComplete = isFinished
         )
@@ -284,13 +269,11 @@ class GeminiPoolService(
         val root = JSONObject()
 
         val formattingGuidance = """
-Respond strictly adhering to this 4-part layout:
+Respond strictly adhering to this 3-part layout:
 <<<ANSWER>>>
 [Your direct conversational answer to the user]
 <<<USER_TRANSCRIPT>>>
 [The exact user sentence uttered in the audio or typed by user]
-<<<POLISHED_TEXT>>>
-[An eloquent, polished, refined version of what the user expressed or wanted to say]
 <<<CORRECTIONS>>>
 [{"type":"GRAMMAR"|"WORD_CHOICE","original":"faulty substring","suggested":"correction","reason":"explanation"}]
 (Note: If there are no grammar or word choice issues, output [] for CORRECTIONS)

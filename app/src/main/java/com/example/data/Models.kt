@@ -41,7 +41,6 @@ data class LinguisticCorrection(
 data class UnifiedTurnUpdate(
     val answer: String = "",
     val userSentence: String? = null,
-    val polishedText: String? = null,
     val corrections: List<LinguisticCorrection> = emptyList(),
     val isComplete: Boolean = false
 )
@@ -57,8 +56,7 @@ data class ChatMessage(
     val modelUsed: String = "gemini-flash-latest",
     val corrections: List<LinguisticCorrection> = emptyList(),
     val isAnalyzingCorrections: Boolean = false,
-    val isWebSearchEnhanced: Boolean = false,
-    val polishedText: String? = null
+    val isWebSearchEnhanced: Boolean = false
 )
 
 data class CustomPersona(

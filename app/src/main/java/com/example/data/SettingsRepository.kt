@@ -278,8 +278,7 @@ class SettingsRepository(context: Context) {
                         modelUsed = obj.optString("modelUsed", "gemini-flash-latest"),
                         corrections = corrList,
                         isAnalyzingCorrections = false,
-                        isWebSearchEnhanced = obj.optBoolean("isWebSearchEnhanced", false),
-                        polishedText = if (obj.has("polishedText") && !obj.isNull("polishedText")) obj.getString("polishedText") else null
+                        isWebSearchEnhanced = obj.optBoolean("isWebSearchEnhanced", false)
                     )
                 )
             }
@@ -300,7 +299,6 @@ class SettingsRepository(context: Context) {
                 put("timestamp", msg.timestamp)
                 put("modelUsed", msg.modelUsed)
                 put("isWebSearchEnhanced", msg.isWebSearchEnhanced)
-                put("polishedText", msg.polishedText ?: JSONObject.NULL)
                 val corrArr = JSONArray()
                 for (c in msg.corrections) {
                     corrArr.put(JSONObject().apply {

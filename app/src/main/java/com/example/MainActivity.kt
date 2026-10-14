@@ -67,9 +67,11 @@ import com.example.ui.screens.ChatScreen
 import com.example.ui.screens.MemoryVaultScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.theme.MyApplicationTheme
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 enum class ScreenState {
     CHAT,
@@ -149,7 +151,7 @@ class MainActivity : ComponentActivity() {
                 isStreaming = true,
                 isAnalyzingCorrections = true,
                 modelUsed = settings.primaryModel,
-                isWebSearchEnhanced = isWebSearchActive
+                isWebSearchEnhanced = false
             )
 
             val msgIndex = if (replaceIndex != null && replaceIndex in messages.indices) {
@@ -163,14 +165,24 @@ class MainActivity : ComponentActivity() {
 
             coroutineScope.launch {
                 var webContext = ""
+                var webSearchError: String? = null
                 if (isWebSearchActive) {
                     val queryText = userText ?: "latest news and current trends"
-                    val searchResult = tavilyPoolService.searchWeb(
+                    tavilyPoolService.searchWeb(
                         query = queryText,
                         thoroughness = settings.tavilyThoroughness
-                    )
-                    searchResult.onSuccess { results ->
+                    ).onSuccess { results ->
                         webContext = results
+                    }.onFailure { err ->
+                        webSearchError = err.message
+                        Log.e("WebSearch", "Tavily failed: ${err.message}")
+                    }
+                }
+                val searchEnhanced = webContext.isNotBlank()
+
+                if (webSearchError != null) {
+                    withContext(Dispatchers.Main) {
+                        android.widget.Toast.makeText(context, "Web search unavailable: $webSearchError", android.widget.Toast.LENGTH_LONG).show()
                     }
                 }
 
@@ -190,17 +202,13 @@ class MainActivity : ComponentActivity() {
                 val activePersona = VoicePersonas.findById(settings.selectedVoicePersona, customPersonas.toList())
                 val systemPrompt = buildString {
                     appendLine(activePersona.systemPromptModifier)
-                    if (isWebSearchActive) {
-                        appendLine()
-                        appendLine("[LIVE WEB SEARCH ACTIVE]: Real-time search tools are enabled. Base answers on verified online information.")
-                    }
                     if (memoryContext.isNotBlank()) {
                         appendLine()
                         appendLine(memoryContext)
                     }
                     if (webContext.isNotBlank()) {
                         appendLine()
-                        appendLine("Web Search Results:")
+                        appendLine("[WEB SEARCH RESULTS ALREADY PROVIDED BELOW]. Answer from them directly. Never promise to 'run a search' later — it already happened:")
                         appendLine(webContext)
                     }
                 }
@@ -218,7 +226,7 @@ class MainActivity : ComponentActivity() {
                             error = err.message ?: "Network error",
                             isStreaming = false,
                             isAnalyzingCorrections = false,
-                            isWebSearchEnhanced = isWebSearchActive
+                            isWebSearchEnhanced = searchEnhanced
                         )
                         settingsRepository.saveChatMessages(messages.toList())
                     }
@@ -228,11 +236,10 @@ class MainActivity : ComponentActivity() {
                         messages[msgIndex] = curr.copy(
                             aiResponse = update.answer,
                             userText = update.userSentence ?: curr.userText,
-                            polishedText = update.polishedText ?: curr.polishedText,
                             corrections = if (update.corrections.isNotEmpty()) update.corrections else curr.corrections,
                             isStreaming = !update.isComplete,
                             isAnalyzingCorrections = !update.isComplete,
-                            isWebSearchEnhanced = isWebSearchActive
+                            isWebSearchEnhanced = searchEnhanced
                         )
                     }
                 }
@@ -243,7 +250,7 @@ class MainActivity : ComponentActivity() {
                     val finalMsg = curr.copy(
                         isStreaming = false,
                         isAnalyzingCorrections = false,
-                        isWebSearchEnhanced = isWebSearchActive
+                        isWebSearchEnhanced = searchEnhanced
                     )
                     messages[msgIndex] = finalMsg
                     settingsRepository.saveChatMessages(messages.toList())
@@ -390,19 +397,27 @@ class MainActivity : ComponentActivity() {
                             }
                         },
                         onAddKey = { newKey ->
-                            val newItem = ApiKeyItem(key = newKey, label = "Key #${apiKeys.size + 1}")
-                            apiKeys.add(newItem)
-                            settingsRepository.saveApiKeys(apiKeys.toList())
-                            poolService.updateKeys(apiKeys.toList())
+                            val cleanKey = newKey.trim()
+                            if (cleanKey.isNotBlank()) {
+                                val newItem = ApiKeyItem(key = cleanKey, label = "Key #${apiKeys.size + 1}")
+                                apiKeys.add(newItem)
+                                settingsRepository.saveApiKeys(apiKeys.toList())
+                                poolService.updateKeys(apiKeys.toList())
+                            }
                         },
                         onBulkAddKeys = { keysList ->
                             val currentSize = apiKeys.size
-                            val newItems = keysList.mapIndexed { idx, k ->
-                                ApiKeyItem(key = k, label = "Key #${currentSize + idx + 1}")
+                            val newItems = keysList
+                                .map { it.trim() }
+                                .filter { it.isNotBlank() }
+                                .mapIndexed { idx, k ->
+                                    ApiKeyItem(key = k, label = "Key #${currentSize + idx + 1}")
+                                }
+                            if (newItems.isNotEmpty()) {
+                                apiKeys.addAll(newItems)
+                                settingsRepository.saveApiKeys(apiKeys.toList())
+                                poolService.updateKeys(apiKeys.toList())
                             }
-                            apiKeys.addAll(newItems)
-                            settingsRepository.saveApiKeys(apiKeys.toList())
-                            poolService.updateKeys(apiKeys.toList())
                         },
                         onDeleteKey = { keyId ->
                             apiKeys.removeAll { it.id == keyId }
@@ -410,19 +425,27 @@ class MainActivity : ComponentActivity() {
                             poolService.updateKeys(apiKeys.toList())
                         },
                         onAddTavilyKey = { newKey ->
-                            val newItem = ApiKeyItem(key = newKey, label = "Tavily #${tavilyKeys.size + 1}")
-                            tavilyKeys.add(newItem)
-                            settingsRepository.saveTavilyApiKeys(tavilyKeys.toList())
-                            tavilyPoolService.updateKeys(tavilyKeys.toList())
+                            val cleanKey = newKey.trim()
+                            if (cleanKey.isNotBlank()) {
+                                val newItem = ApiKeyItem(key = cleanKey, label = "Tavily #${tavilyKeys.size + 1}")
+                                tavilyKeys.add(newItem)
+                                settingsRepository.saveTavilyApiKeys(tavilyKeys.toList())
+                                tavilyPoolService.updateKeys(tavilyKeys.toList())
+                            }
                         },
                         onBulkAddTavilyKeys = { keysList ->
                             val currentSize = tavilyKeys.size
-                            val newItems = keysList.mapIndexed { idx, k ->
-                                ApiKeyItem(key = k, label = "Tavily #${currentSize + idx + 1}")
+                            val newItems = keysList
+                                .map { it.trim() }
+                                .filter { it.isNotBlank() }
+                                .mapIndexed { idx, k ->
+                                    ApiKeyItem(key = k, label = "Tavily #${currentSize + idx + 1}")
+                                }
+                            if (newItems.isNotEmpty()) {
+                                tavilyKeys.addAll(newItems)
+                                settingsRepository.saveTavilyApiKeys(tavilyKeys.toList())
+                                tavilyPoolService.updateKeys(tavilyKeys.toList())
                             }
-                            tavilyKeys.addAll(newItems)
-                            settingsRepository.saveTavilyApiKeys(tavilyKeys.toList())
-                            tavilyPoolService.updateKeys(tavilyKeys.toList())
                         },
                         onDeleteTavilyKey = { keyId ->
                             tavilyKeys.removeAll { it.id == keyId }
@@ -499,6 +522,13 @@ class MainActivity : ComponentActivity() {
                         isWebSearchEnabled = settings.tavilySearchEnabled,
                         onToggleWebSearch = {
                             val nextState = !settings.tavilySearchEnabled
+                            if (nextState && tavilyKeys.isEmpty()) {
+                                android.widget.Toast.makeText(
+                                    context,
+                                    "Add a Tavily API key first: Settings → API Keys",
+                                    android.widget.Toast.LENGTH_LONG
+                                ).show()
+                            }
                             val updated = settings.copy(tavilySearchEnabled = nextState)
                             settings = updated
                             settingsRepository.saveSettings(updated)
